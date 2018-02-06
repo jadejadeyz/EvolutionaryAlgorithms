@@ -10,6 +10,7 @@ import time
 import os
 
 cities_list = []
+dist_dict = {}
 
 class City(object):
 	"""
@@ -17,18 +18,17 @@ class City(object):
 
 	self.id         : an int storing city ID.
 	self.coordinate : a 2D numpy array storing the coordinate of a city.
-	self.dist_dict  : a dictionary storing the distances "self" to others cities.
 
 	"""
 	def __init__(self, city_id, x, y, dist_dict=None):
 		self.id = city_id
 		self.coordinate = np.array((x, y))
-		self.dist_dict = {self.id : 0.0}
-		if dist_dict:
-			self.dist_dict = dist_dict
+		#self.dist_dict = {self.id : 0.0}
+		#if dist_dict:
+		#	self.dist_dict = dist_dict
 		cities_list.append(self)
 
-
+	"""
 	def distance_to_others(self):
 		for city in cities_list:
 			temp_dist = self.euclidean_distance(self.coordinate, city.coordinate)
@@ -37,11 +37,8 @@ class City(object):
 
 	def euclidean_distance(self, source, target):
 		return np.linalg.norm(source - target)
+	"""
 
-
-	def print_dist(self):
-		for i in self.dist_dict.keys():
-			print i, "  : ", self.dist_dict[i]
 
 
 class Route(object):
@@ -64,8 +61,9 @@ class Route(object):
 
 		for city in self.route:
 			next_city = self.route[self.route.index(city) - len(self.route) + 1]
-			dist_between = city.dist_dict[next_city.id]
-			self.fitness += dist_between
+
+			self.fitness += dist_dict[(min(city.id, next_city.id), max(city.id, next_city.id))]
+
 
 
 	def get_city_ids(self, route):
@@ -138,14 +136,30 @@ class GA(object):
 
 	"""
 
-	# Parent selection: tournament selection with replacement
-	def parent_selection(self, population, tournament_size):
+	# Parent selection: tournament selection
+	def parent_selection(self, population, tournament_size, replacement=True):
 		self.mate_population = Population(population.pop_size, False)
-		for i in range(population.pop_size):
-			random.seed(time.time())
-			competitors = [population.population[random.randint(0, population.pop_size - 1)] for k in range(tournament_size)]
-			winner = sorted(competitors, key=lambda rt: rt.fitness, reverse=False)[0]
-			self.mate_population.population.append(winner)
+
+		# With replacement
+		if replacement == True:		
+			for i in range(population.pop_size):
+				random.seed(time.time())
+				competitors = sorted(population.population, key=lambda *args : random.random())[:tournament_size]
+				winner = sorted(competitors, key=lambda rt: rt.fitness, reverse=False)[0]
+				self.mate_population.population.append(winner)
+
+		# Without replacement
+		if replacement == False:
+			for i in range(0, population.pop_size, population.pop_size/tournament_size):
+				# In each partition, select the top k individuals (k is the size of tournament)
+				random.seed(time.time())
+				# Randomize the population
+				competitors = sorted(population.population, key=lambda *args : random.random())[:]
+				# select the top "tournament_size" members of each partition
+				winners = sorted(competitors[i:i+ population.pop_size/tournament_size], key=lambda rt:rt.fitness, reverse=False)[:tournament_size]
+				self.mate_population.population.extend(winners)
+				# Randomize the mating pool
+				self.mate_population.population = sorted(self.mate_population.population, key=lambda *args : random.random())[:]
 
 		return self.mate_population
 
@@ -264,7 +278,7 @@ class GA(object):
 			return parent
 
 
-	# Survivor selection: derterministic methods -> ranking all the parents and offsprings
+	# Survivor selection: deterministic methods -> ranking all the parents and offsprings
 	def survivor_selection(self, mate_population, offspring_population):
 		self.all_members = [i for i in mate_population.population]
 		self.all_members.extend(offspring_population.population)
@@ -276,7 +290,7 @@ class GA(object):
 	# The evolution of a current generation
 	def evolution(self, cur_population, parameters):
 		# Step 1: create mating pool (stochastic), the size of mating pool = the size of population
-		self.parent_selection(cur_population, parameters[1])
+		self.parent_selection(cur_population, parameters[1], replacement=False)
 
 		# Step 2: recombine two consecutive parents in the mating pool, and reproduce two offspring after crossover.
 		self.kids_population = Population(cur_population.pop_size, False)
@@ -329,18 +343,25 @@ class Session(object):
 					self.mut_scheme = line_data[1]
 
 		self.parameters = (self.pop_size, self.tournament_size, self.xover_pr, self.mutation_pr, self.mut_scheme)
-		# Loading city list
+		# Initialize cities_list
 		self.read_cities(city_file)
+		# Construct dist_dict for fitness evaluation
+		self.construct_dist_ref()
 
 	# read cities from a file
 	def read_cities(self, city_file):
 		with open(city_file, 'r') as infile:
 			for line in infile:
 				line_data = line.strip().split(' ')
-				new_city = City(line_data[0], float(line_data[1]), float(line_data[2]))
+				# Add new_city into the global variable "cities_list"
+				new_city = City(int(line_data[0]), float(line_data[1]), float(line_data[2]))
 
-		for city in cities_list:
-			city.distance_to_others()
+
+	# Create the global distance reference for all chromosomes
+	def construct_dist_ref(self):
+		for i in range(len(cities_list) - 1):
+			for j in range(i, len(cities_list)):
+				dist_dict[(cities_list[i].id, cities_list[j].id)] = np.linalg.norm(cities_list[i].coordinate - cities_list[j].coordinate)
 
 	def run(self):
 		
