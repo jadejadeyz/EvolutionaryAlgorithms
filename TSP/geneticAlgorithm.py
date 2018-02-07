@@ -48,7 +48,8 @@ class Route(object):
 		else:
 			# initialize a permutation of cities as an individual
 			random.seed(time.time())
-			self.route = sorted(cities_seed, key=lambda *args : random.random())
+			random.shuffle(cities_seed)
+			self.route = cities_seed[:]
 			# calculate the length of the route
 			self.fitness_evaluation()
 
@@ -190,17 +191,10 @@ class GA(object):
 		if child[i] == None:
 			child[i] = gene
 		else:
-			#city_name = child[i].id
-			update_index = parent.index(child[i])
-			#update_index = self.slide(parent, city_name)
-			self.fill_in(child, parent, gene, update_index)
-
-
-	#def slide(self, route, name):
-	#	for city in route:
-	#		if city.id == name:
-	#			return route.index(city)
-
+			while child[i] != None:
+				i = parent.index(child[i])
+			child[i] = gene
+			
 
 	# Mutation: default scheme is Inversion Mutation.
 	def mutation(self, parent, mut_pr, scheme="inversion"):
@@ -378,7 +372,7 @@ class Session(object):
 		if from_file == True:
 			x = range(self.max_generation)
 			yb, yw, ya = [], [], []
-			with open("run_summary.tsv", 'r') as infile:
+			with open(self.fit_filename, 'r') as infile:
 				for line in infile:
 					line_data = line.strip().split('\t')
 					yb.append(float(line_data[1]))
@@ -403,9 +397,9 @@ class Session(object):
 		plt.legend(loc='upper right')
 		plt.xlim(0, self.max_generation)
 		plt.ylim(yb[-1] - 5000, yw[0] + 5000)
-		ax.xaxis.set_major_locator( MultipleLocator(100) )
-		ax.xaxis.set_minor_locator( MultipleLocator(10) )
-		ax.xaxis.set_major_locator( MultipleLocator(100) )
+		ax.xaxis.set_major_locator( MultipleLocator(len(ya) / 10) )
+		ax.xaxis.set_minor_locator( MultipleLocator(len(ya) / 100) )
+		ax.xaxis.set_major_locator( MultipleLocator(len(ya) / 10) )
 		ax.xaxis.set_major_formatter(FormatStrFormatter('%d'))
 		plt.xlabel("Time")
 		plt.ylabel("EA Behaviours")
