@@ -13,6 +13,7 @@ import sys
 import os
 
 cities_list = []
+cities_seed = []
 dist_dict = {}
 
 class City(object):
@@ -42,11 +43,12 @@ class Route(object):
 	"""
 	def __init__(self, empty_route=False):
 		if empty_route == True:
-			self.route = [City(blank_city=True) for i in range(len(cities_list))]
+			self.route = [None for i in range(len(cities_list))]
 			self.fitness = 0.0
 		else:
 			# initialize a permutation of cities as an individual
-			self.route = copy.deepcopy(sorted(cities_list, key=lambda *args : random.random()))
+			random.seed(time.time())
+			self.route = sorted(cities_seed, key=lambda *args : random.random())
 			# calculate the length of the route
 			self.fitness_evaluation()
 
@@ -55,18 +57,13 @@ class Route(object):
 		self.fitness = 0.0
 		c2 = self.route[:-1]
 		c2.insert(0, self.route[-1])
-		self.fitness = sum(dist_dict[(min(s.id, t.id), max(s.id, t.id))] for s, t in zip(self.route, c2))
-
-
-	def get_city_ids(self, route):
-		self.id_list = [city.id for city in route]
-		return self.id_list
+		self.fitness = sum(dist_dict[(min(s, t), max(s, t))] for s, t in zip(self.route, c2))
 
 
 	def print_route(self):
 		for i in range(0, len(self.route), 20):
 			for j in range(i, min(i + 20, len(self.route))):
-				print "%3d, " % self.route[j].id,
+				print "%3d, " % self.route[j],
 			if i == len(self.route) / 20 * 20:
 				print '\b\b\b.'
 			else:
@@ -161,24 +158,26 @@ class GA(object):
 			l = min(self.xover_pos_1, self.xover_pos_2)
 			r = max(self.xover_pos_1, self.xover_pos_2)
 
-			self.child1.route[l:r+1] = copy.deepcopy(parent_1.route[l:r+1])
-			self.child2.route[l:r+1] = copy.deepcopy(parent_2.route[l:r+1])
+			self.child1.route[l:r+1] = parent_1.route[l:r+1]
+			self.child2.route[l:r+1] = parent_2.route[l:r+1]
 
 			# Composition of child 1
-			self.uncopied_id_1 = [city.id for city in parent_2.route if city.id not in parent_1.get_city_ids(parent_1.route[l:r+1])]
+			self.uncopied_id_1 = set(parent_2.route) - set(parent_1.route[l:r+1])
+			#self.uncopied_id_1 = [city.id for city in parent_2.route if city.id not in parent_1.get_city_ids(parent_1.route[l:r+1])]
 			for i in range(len(parent_1.route)):
 				index_1 = (l + i) % len(parent_1.route)
-				if parent_2.route[index_1].id in self.uncopied_id_1:
+				if parent_2.route[index_1] in self.uncopied_id_1:
 					self.fill_in(self.child1.route, parent_2.route, parent_2.route[index_1], index_1)
 			
 			# Re-evaluate fitness of child 1
 			self.child1.fitness_evaluation()
 
 			# Composition of child 2
-			self.uncopied_id_2 = [city.id for city in parent_1.route if city.id not in parent_2.get_city_ids(parent_2.route[l:r+1])]
+			self.uncopied_id_2 = set(parent_1.route) - set(parent_2.route[l:r+1])
+			#self.uncopied_id_2 = [city.id for city in parent_1.route if city.id not in parent_2.get_city_ids(parent_2.route[l:r+1])]
 			for i in range(len(parent_1.route)):			
 				index = (l + i) % len(parent_1.route)
-				if parent_1.route[index].id in self.uncopied_id_2:
+				if parent_1.route[index] in self.uncopied_id_2:
 					self.fill_in(self.child2.route, parent_1.route, parent_1.route[index], index)
 			
 			# Re-evaluate fitness of child 2
@@ -188,18 +187,19 @@ class GA(object):
 
 
 	def fill_in(self, child, parent, gene, i):
-		if child[i].id == '':
-			child[i] = copy.deepcopy(gene)
+		if child[i] == None:
+			child[i] = gene
 		else:
-			city_name = child[i].id
-			update_index = self.slide(parent, city_name)
+			#city_name = child[i].id
+			update_index = parent.index(child[i])
+			#update_index = self.slide(parent, city_name)
 			self.fill_in(child, parent, gene, update_index)
 
 
-	def slide(self, route, name):
-		for city in route:
-			if city.id == name:
-				return route.index(city)
+	#def slide(self, route, name):
+	#	for city in route:
+	#		if city.id == name:
+	#			return route.index(city)
 
 
 	# Mutation: default scheme is Inversion Mutation.
@@ -250,7 +250,7 @@ class GA(object):
 			return parent
 
 
-	# Survivor selection: deterministic methods -> ranking all the parents and offsprings
+	# Survivor selection: deterministic methods -> ranking all the parents and offspring
 	def survivor_selection(self, mate_population, offspring_population):
 		self.mate_population.population.extend(offspring_population.population)
 		self.next_generation = sorted(self.mate_population.population, key=lambda rt: rt.fitness, reverse=False)[0:mate_population.pop_size]
@@ -325,6 +325,7 @@ class Session(object):
 				line_data = line.strip().split(' ')
 				# Add new_city into the global variable "cities_list"
 				cities_list.append(City(int(line_data[0]), float(line_data[1]), float(line_data[2])))
+				cities_seed.append(int(line_data[0]))
 
 
 	# Create the global distance reference for all chromosomes
@@ -402,9 +403,9 @@ class Session(object):
 		plt.legend(loc='upper right')
 		plt.xlim(0, self.max_generation)
 		plt.ylim(yb[-1] - 5000, yw[0] + 5000)
-		ax.xaxis.set_major_locator( MultipleLocator(10) )
-		ax.xaxis.set_minor_locator( MultipleLocator(1) )
-		ax.xaxis.set_major_locator( MultipleLocator(10) )
+		ax.xaxis.set_major_locator( MultipleLocator(100) )
+		ax.xaxis.set_minor_locator( MultipleLocator(10) )
+		ax.xaxis.set_major_locator( MultipleLocator(100) )
 		ax.xaxis.set_major_formatter(FormatStrFormatter('%d'))
 		plt.xlabel("Time")
 		plt.ylabel("EA Behaviours")
