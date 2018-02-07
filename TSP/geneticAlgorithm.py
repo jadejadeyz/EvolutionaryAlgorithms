@@ -1,12 +1,15 @@
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.animation as animation
+from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 import numpy as np
 import pandas as pd
+import itertools
 import random
 import copy
 import math
 import time
+import sys
 import os
 
 cities_list = []
@@ -20,25 +23,13 @@ class City(object):
 	self.coordinate : a 2D numpy array storing the coordinate of a city.
 
 	"""
-	def __init__(self, city_id, x, y, dist_dict=None):
-		self.id = city_id
-		self.coordinate = np.array((x, y))
-		#self.dist_dict = {self.id : 0.0}
-		#if dist_dict:
-		#	self.dist_dict = dist_dict
-		cities_list.append(self)
-
-	"""
-	def distance_to_others(self):
-		for city in cities_list:
-			temp_dist = self.euclidean_distance(self.coordinate, city.coordinate)
-			self.dist_dict[city.id] = temp_dist
-
-
-	def euclidean_distance(self, source, target):
-		return np.linalg.norm(source - target)
-	"""
-
+	def __init__(self, city_id='', x=0.0, y=0.0, blank_city=False):
+		if blank_city == True:
+			self.id = ''
+			self.coordinate = np.array((0.0, 0.0))
+		else:
+			self.id = city_id
+			self.coordinate = np.array((x, y))
 
 
 class Route(object):
@@ -49,21 +40,22 @@ class Route(object):
 	self.fitness  : the total lenght of a route.
 
 	"""
-	def __init__(self):
-		# initialize a permutation of cities as an individual
-		self.route = copy.deepcopy(sorted(cities_list, key=lambda *args : random.random()))
-		# calculate the length of the route
-		self.fitness_evaluation()
+	def __init__(self, empty_route=False):
+		if empty_route == True:
+			self.route = [City(blank_city=True) for i in range(len(cities_list))]
+			self.fitness = 0.0
+		else:
+			# initialize a permutation of cities as an individual
+			self.route = copy.deepcopy(sorted(cities_list, key=lambda *args : random.random()))
+			# calculate the length of the route
+			self.fitness_evaluation()
 
 
 	def fitness_evaluation(self):
 		self.fitness = 0.0
-
-		for city in self.route:
-			next_city = self.route[self.route.index(city) - len(self.route) + 1]
-
-			self.fitness += dist_dict[(min(city.id, next_city.id), max(city.id, next_city.id))]
-
+		c2 = self.route[:-1]
+		c2.insert(0, self.route[-1])
+		self.fitness = sum(dist_dict[(min(s.id, t.id), max(s.id, t.id))] for s, t in zip(self.route, c2))
 
 
 	def get_city_ids(self, route):
@@ -72,10 +64,13 @@ class Route(object):
 
 
 	def print_route(self):
-		output = ''
-		for city in self.route:
-			output += city.id + ', '
-		print '[', output[:-2], ']'
+		for i in range(0, len(self.route), 20):
+			for j in range(i, min(i + 20, len(self.route))):
+				print "%3d, " % self.route[j].id,
+			if i == len(self.route) / 20 * 20:
+				print '\b\b\b.'
+			else:
+				print '\n'
 
 
 class Population(object):
@@ -93,41 +88,40 @@ class Population(object):
 
 	"""
 	def __init__(self, pop_size, init_flag):
-		self.pop_size = pop_size
-		self.population = []
+		self.pop_size = pop_size	
 		if init_flag == True:
 			self.population = [Route() for i in range(pop_size)]
+		else:
+			self.population = []
 
 	# get the route with the highest fitness
 	def fittest_individual(self):
+		#self.fittest_route = min(self.population, key=lambda rt: rt.fitness)
 		self.fittest_route = sorted(self.population, key=lambda rt: rt.fitness, reverse=False)[0]
 		return self.fittest_route
 
-	# get the value of the best fitness
-	def get_best_fitness(self):
-		self.current_best = sorted(self.population, key=lambda rt: rt.fitness, reverse=False)[0].fitness
-		return self.current_best
 
-	# get the value of the mean fitness
-	def get_average_fitness(self):
+	def get_runtime_fitness(self):
+		fitness_ranking = sorted(self.population, key=lambda rt: rt.fitness, reverse=False)
+		self.fittest_route = fitness_ranking[0]
+		self.current_best = fitness_ranking[0].fitness
+		self.current_worst = fitness_ranking[-1].fitness
+
 		length_data = np.array([i.fitness for i in self.population])
 		self.current_average = np.mean(length_data)
-		return self.current_average
-
-	# get the value of the worst fitness
-	def get_worst_fitness(self):
-		self.current_worst = sorted(self.population, key=lambda rt: rt.fitness, reverse=True)[0].fitness
-		return self.current_worst
 
 
 	def population_summary(self, generation_i):
-		best = self.get_best_fitness()
-		worst = self.get_worst_fitness()
-		mean = self.get_average_fitness()
+		self.get_runtime_fitness()
 
-		print "#%3d  Best Fitness : %.6f\t\t Average Fitness : %.6f\t\t Worst Fitness : %.6f" % (generation_i, best, mean, worst)
+		if generation_i == 0:
+			print "The initial context of the population: "
+			print "#%3d  Best Fitness : %.6f\t\tAverage Fitness : %.6f\t\tWorst Fitness : %.6f" % (generation_i, self.current_best, self.current_average, self.current_worst)
+			
+		else:
+			print "#%3d  Best Fitness : %.6f\t\tAverage Fitness : %.6f\t\tWorst Fitness : %.6f" % (generation_i, self.current_best, self.current_average, self.current_worst)
 
-		return (best, worst, mean)
+		return (self.fittest_route, self.current_best, self.current_average, self.current_worst)
 
 
 class GA(object):
@@ -137,29 +131,13 @@ class GA(object):
 	"""
 
 	# Parent selection: tournament selection
-	def parent_selection(self, population, tournament_size, replacement=True):
+	def parent_selection(self, population, tournament_size, replacement=False):
 		self.mate_population = Population(population.pop_size, False)
-
-		# With replacement
-		if replacement == True:		
-			for i in range(population.pop_size):
-				random.seed(time.time())
-				competitors = sorted(population.population, key=lambda *args : random.random())[:tournament_size]
-				winner = sorted(competitors, key=lambda rt: rt.fitness, reverse=False)[0]
-				self.mate_population.population.append(winner)
-
-		# Without replacement
-		if replacement == False:
-			for i in range(0, population.pop_size, population.pop_size/tournament_size):
-				# In each partition, select the top k individuals (k is the size of tournament)
-				random.seed(time.time())
-				# Randomize the population
-				competitors = sorted(population.population, key=lambda *args : random.random())[:]
-				# select the top "tournament_size" members of each partition
-				winners = sorted(competitors[i:i+ population.pop_size/tournament_size], key=lambda rt:rt.fitness, reverse=False)[:tournament_size]
-				self.mate_population.population.extend(winners)
-				# Randomize the mating pool
-				self.mate_population.population = sorted(self.mate_population.population, key=lambda *args : random.random())[:]
+		for i in range(population.pop_size):
+			random.seed(time.time())
+			competitors = [population.population[random.randint(0, population.pop_size - 1)] for k in range(tournament_size)]
+			winner = sorted(competitors, key=lambda rt: rt.fitness, reverse=False)[0]
+			self.mate_population.population.append(winner)
 
 		return self.mate_population
 
@@ -168,14 +146,8 @@ class GA(object):
 	def PMX_crossover(self, parent_1, parent_2, xover_pr):
 
 		# clone two offspring of the parents
-		self.child1 = Route()
-		self.child2 = Route()
-
-		for city in self.child1.route:
-			city.id = ''
-
-		for city in self.child2.route:
-			city.id = ''
+		self.child1 = Route(empty_route=True)
+		self.child2 = Route(empty_route=True)
 
 		self.xover_pos_1 = random.randrange(0, len(parent_1.route) - 1)
 		random.seed(time.time())
@@ -280,10 +252,8 @@ class GA(object):
 
 	# Survivor selection: deterministic methods -> ranking all the parents and offsprings
 	def survivor_selection(self, mate_population, offspring_population):
-		self.all_members = [i for i in mate_population.population]
-		self.all_members.extend(offspring_population.population)
-		self.all_members = sorted(self.all_members, key=lambda rt: rt.fitness, reverse=False)
-		self.next_generation = self.all_members[0:mate_population.pop_size]
+		self.mate_population.population.extend(offspring_population.population)
+		self.next_generation = sorted(self.mate_population.population, key=lambda rt: rt.fitness, reverse=False)[0:mate_population.pop_size]
 		return self.next_generation
 
 
@@ -316,8 +286,8 @@ class Session(object):
 
 	"""
 	def __init__(self, parameters_file, city_file):
+		self.city_file_name = city_file.strip().split('_')[3][:-4]
 		# Loading the parameters of the current run.
-		self.image_name = 'EA_behaviours_' + city_file.strip().split('_')[3][:-4] + '.eps'
 		with open(parameters_file, 'r') as infile:
 			for line in infile:
 				line_data = line.strip().split('\t')
@@ -354,7 +324,7 @@ class Session(object):
 			for line in infile:
 				line_data = line.strip().split(' ')
 				# Add new_city into the global variable "cities_list"
-				new_city = City(int(line_data[0]), float(line_data[1]), float(line_data[2]))
+				cities_list.append(City(int(line_data[0]), float(line_data[1]), float(line_data[2])))
 
 
 	# Create the global distance reference for all chromosomes
@@ -363,45 +333,49 @@ class Session(object):
 			for j in range(i, len(cities_list)):
 				dist_dict[(cities_list[i].id, cities_list[j].id)] = np.linalg.norm(cities_list[i].coordinate - cities_list[j].coordinate)
 
+
 	def run(self):
-		
+
 		self.run_summary = []
 
 		# Initialize the population of the first generation
 		self.tsp_population = Population(self.pop_size, init_flag=True)
-		self.best_solution = self.tsp_population.fittest_individual()
+		self.best_solution = self.tsp_population.population_summary(0)[0]
 
 		# the evolution of the population for max_generation generations
 		start_time = time.time()
 		for i in range(self.max_generation):
 			self.tsp_population.population = GA().evolution(self.tsp_population, self.parameters)
-			self.run_summary.append(self.tsp_population.population_summary(i+1))
+			self.fitness_info = self.tsp_population.population_summary(i+1)
+			self.run_summary.append(self.fitness_info[1:])
 
-			if self.tsp_population.fittest_individual().fitness < self.best_solution.fitness:
-				self.fittest_solution = copy.deepcopy(self.tsp_population.fittest_individual())
-
+			if self.fitness_info[0].fitness < self.best_solution.fitness:
+				self.best_solution = self.fitness_info[0]
 		self.time_consumed = time.time() - start_time
 
+		timestamp = time.strftime('%m-%d_%H-%M-%S', time.localtime())
+		self.image_name     = timestamp + '_EA_behaviours_' + self.city_file_name + '.eps'
+		self.fit_filename   = timestamp + '_EA_fitnesses_' + self.city_file_name + '.tsv'
 		# Display the summary of the current run: the time consumed and the information of the best route
-		self.summary()
+		self.summary(save=True)
 
 
 	def summary(self, save=True):
 		if save == True:
 			df = pd.DataFrame.from_records(self.run_summary)
-			df.to_csv('run_summary.tsv', sep='\t', header=False)
+			df.to_csv(self.fit_filename, sep='\t', header=False)
 
 		print "Time consumed for the run         :  %.2f seconds." % self.time_consumed
-		print "The route length of the solution  :  %.6f " % self.fittest_solution.fitness
+		print "The route length of the solution  :  %.6f " % self.best_solution.fitness
 		print "Final solution route of the run   :  "
 		# Display the final solution
-		self.fittest_solution.print_route()
+		self.best_solution.print_route()
 
 
-	def show_behaviour(self, from_file=False):
+	def show_behaviour(self, run_time, from_file=False):
 
 		if from_file == True:
-			x = range(100)
+			x = range(self.max_generation)
 			yb, yw, ya = [], [], []
 			with open("run_summary.tsv", 'r') as infile:
 				for line in infile:
@@ -411,21 +385,30 @@ class Session(object):
 					ya.append(float(line_data[3]))
 
 		if from_file == False:
-			x = range(100)
+			x = range(self.max_generation)
 			yb = [i[0] for i in self.run_summary]
-			yw = [i[1] for i in self.run_summary]
-			ya = [i[2] for i in self.run_summary]
+			ya = [i[1] for i in self.run_summary]
+			yw = [i[2] for i in self.run_summary]
 
 		mpl.style.use('default')
 
-		#plt.grid()
+		plt.figure(run_time)
+		ax = plt.gca()
 		plt.plot(x, yb, c='C1', linestyle="-", label="Best Fitness")
 		plt.plot(x, yw, c='C2', linestyle=":", label="Worst Fitness")
-		plt.plot(x, ya, c='C3', linestyle="-.", label="Mean Fitness")
+		plt.plot(x, ya, c='C6', linestyle="--", label="Mean Fitness")
 
 		plt.title("Behaviours of Evolutionary Algorithm for TSP")
-		plt.xticks([0, 100])
+		plt.legend(loc='upper right')
+		plt.xlim(0, self.max_generation)
+		plt.ylim(yb[-1] - 5000, yw[0] + 5000)
+		ax.xaxis.set_major_locator( MultipleLocator(10) )
+		ax.xaxis.set_minor_locator( MultipleLocator(1) )
+		ax.xaxis.set_major_locator( MultipleLocator(10) )
+		ax.xaxis.set_major_formatter(FormatStrFormatter('%d'))
 		plt.xlabel("Time")
 		plt.ylabel("EA Behaviours")
 		plt.savefig(self.image_name, format='eps', dpi=5000)
-		plt.show()
+		ax.xaxis.grid(True, which='major', linestyle='dotted')
+		ax.yaxis.grid(True, which='major', linestyle='dotted')
+		#plt.show()
