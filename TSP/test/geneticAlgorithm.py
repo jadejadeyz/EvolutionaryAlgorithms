@@ -339,7 +339,7 @@ class Session(object):
 		self.summary(save=True)
 
 
-	def show_route(self):
+	def show_route(self, save=True):
 		global genotype_length
 		for i in range(0, genotype_length, 20):
 			for j in range(i, min(i + 20, genotype_length)):
@@ -348,6 +348,14 @@ class Session(object):
 				print '\b\b\b.'
 			else:
 				print '\n'
+		if save == True:
+			with open(self.route_file, 'w') as outfile:
+				for i in range(genotype_length - 1):
+					outfile.write('{:3d},'.format(self.best_solution[0][i]))
+					if i % 20 == 19:
+						outfile.write("\n")
+				outfile.write('{:3d}.'.format(self.best_solution[0][genotype_length-1]))
+				outfile.write("\nBest Individual's Fitness (Total travel Length) : %s\n" % self.best_solution[1])
 
 
 	def summary(self, save=True):
