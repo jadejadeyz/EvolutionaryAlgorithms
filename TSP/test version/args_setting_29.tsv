@@ -1,7 +1,0 @@
-mutation_probability	0.5
-crossover_probability	0.9
-max_generation	100
-population_size	200
-tournament_size	50
-mutation_scheme	inversion
-elitism	True
