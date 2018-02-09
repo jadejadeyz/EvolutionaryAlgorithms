@@ -8,13 +8,8 @@ import matplotlib as mpl
 from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 import numpy as np
 import pandas as pd
-import itertools
 import random
-import copy
-import math
 import time
-import sys
-import os
 
 cities_list = []  # Used to construct distance dictionary "dist_dict", see below.
 cities_seed = []  # Used as permutation seeds when initializing the population.
@@ -24,12 +19,14 @@ new_keys = []     # Used to shuffle the new generation.
 ## Parameters for GA RUN ##
 max_population_size = 0
 genotype_length     = 0
-mutation_scheme     = ""
+mutation_scheme     = ''
 tournament_size     = 0
 max_generation      = 0
 mutation_pr         = 0.0
 xover_pr            = 0.0
-elitism             = True
+stagnation          = 'False'
+stag_counter        = 0
+stag_delta          = 0
 
 class City(object):
 	"""
@@ -256,7 +253,9 @@ class Session(object):
 		global max_population_size
 		global max_generation
 		global mutation_scheme
-		global elitism
+		global stagnation
+		global stag_delta
+		global stag_counter
 
 		self.city_file_name = city_file.strip().split('_')[3][:-4]
 		# Loading the parameters of the current run.
@@ -278,11 +277,17 @@ class Session(object):
 				if line_data[0] == "tournament_size":
 					tournament_size = int(line_data[1])
 
-				if line_data[0] == "elitism":
-					elitism = bool(line_data[1])
-
 				if line_data[0] == "mutation_scheme":
 					mutation_scheme = line_data[1]
+
+				if line_data[0] == "stag_delta":
+					stag_delta = float(line_data[1])
+
+				if line_data[0] == "stagnation":
+					stagnation = line_data[1]
+
+				if line_data[0] == "stag_counter":
+					stag_counter = int(line_data[1])
 
 		# Initialize cities_list
 		self.read_cities(city_file)
@@ -315,32 +320,69 @@ class Session(object):
 
 	def run(self):
 		global max_generation
+		global stagnation
+		global stag_delta
+		global stag_counter
 
 		self.run_summary = []
 
 		# Initialize the EA for TSP
 		tsp_search = GA()
 		# Get the information of the initial generation.
+		start_time = time.time()
 		self.best_solution = tsp_search.best_solution
 
-		# the evolution of the population for max_generation generations
-		start_time = time.time()
-		for i in range(max_generation):
-			tsp_search.evolution(i)
-			self.run_summary.append([tsp_search.best_solution[1], tsp_search.mean, tsp_search.worst])
+		# Termination Condition: Stag
+		if stagnation == 'True':
+			tsp_search.evolution(0)
 			if tsp_search.best_solution[1] < self.best_solution[1]:
 				self.best_solution = tsp_search.best_solution
+			i = 1
+			counter = 0
+			ref_fitness = tsp_search.best_solution[1]
+			while counter < stag_counter:
+				tsp_search.evolution(i)
+				if tsp_search.best_solution[1] < self.best_solution[1]:
+					self.best_solution = tsp_search.best_solution
+				i += 1
+				counter += 1
+				if counter == stag_counter:
+					if abs(self.best_solution[1] - ref_fitness) < self.best_solution[1]*stag_delta:
+						break
+					else:
+						ref_fitness = tsp_search.best_solution[1]
+						counter = 0
+
+		# the evolution of the population for max_generation generations
+		if stagnation == 'False':
+			for i in range(max_generation):
+				tsp_search.evolution(i+1)
+				self.run_summary.append([tsp_search.best_solution[1], tsp_search.mean, tsp_search.worst])
+				if tsp_search.best_solution[1] < self.best_solution[1]:
+					self.best_solution = tsp_search.best_solution
+					
 		self.time_consumed = time.time() - start_time
 
 		timestamp = time.strftime('%m-%d_%H-%M-%S', time.localtime())
 		self.image_name     = timestamp + '_EA_behaviours_' + self.city_file_name + '.eps'
 		self.fit_filename   = timestamp + '_EA_fitnesses_' + self.city_file_name + '.tsv'
+		self.route_file     = timestamp + '_Route_Info_' + self.city_file_name + '.txt'
 		# Display the summary of the current run: the time consumed and the information of the best route
 		self.summary(save=True)
 
 
 	def show_route(self, save=True):
 		global genotype_length
+		global max_population_size
+		global mutation_scheme
+		global tournament_size
+		global max_generation
+		global mutation_pr
+		global xover_pr
+		global stagnation
+		global stag_counter
+		global stag_delta
+
 		for i in range(0, genotype_length, 20):
 			for j in range(i, min(i + 20, genotype_length)):
 				print "%3d, " % self.best_solution[0][j],
@@ -356,6 +398,17 @@ class Session(object):
 						outfile.write("\n")
 				outfile.write('{:3d}.'.format(self.best_solution[0][genotype_length-1]))
 				outfile.write("\nBest Individual's Fitness (Total travel Length) : %s\n" % self.best_solution[1])
+				outfile.write("Total time : %s seconds\n" % self.time_consumed)
+				outfile.write("\n\nParameter Settings for this run:\n")
+				outfile.write("max_population_size : %s \n" % max_population_size)
+				outfile.write("mutation_scheme : %s \n" % mutation_scheme)
+				outfile.write("tournament_size : %s \n" % tournament_size)
+				outfile.write("max_generation : %s \n" % max_generation)
+				outfile.write("mutation_pr : %s \n" % mutation_pr)
+				outfile.write("xover_pr : %s \n" % xover_pr)
+				outfile.write("stagnation : %s \n" % stagnation)
+				outfile.write("stag_counter : %s \n" % stag_counter)
+				outfile.write("stag_delta : %s \n" % stag_delta)
 
 
 	def summary(self, save=True):
