@@ -1,7 +1,9 @@
-mutation_probability	0.5
-crossover_probability	0.9
+mutation_probability	0.3
+crossover_probability	0.8
 max_generation	100
-population_size	200
-tournament_size	50
+population_size	100
+tournament_size	5
 mutation_scheme	inversion
-elitism	True
+stagnation	False
+stag_delta	0.01
+stag_counter	200
