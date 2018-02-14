@@ -1,9 +1,9 @@
 mutation_probability	0.3
 crossover_probability	0.8
-max_generation	20
+max_generation	50000
 population_size	100
-tournament_size	5
+tournament_size	10
 mutation_scheme	inversion
-stagnation	False
+stagnation	True
 stag_delta	0.01
-stag_counter	500
+stag_counter	200
