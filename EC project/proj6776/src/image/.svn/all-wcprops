@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/!svn/ver/135/trunk/Tetris/image
+END
+backlayer.png
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/!svn/ver/135/trunk/Tetris/image/backlayer.png
+END
+background.png
+K 25
+svn:wc:ra_dav:version-url
+V 51
+/svn/!svn/ver/135/trunk/Tetris/image/background.png
+END
+metalayer.png
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/!svn/ver/135/trunk/Tetris/image/metalayer.png
+END

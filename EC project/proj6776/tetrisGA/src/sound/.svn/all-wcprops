@@ -1,0 +1,41 @@
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/!svn/ver/135/trunk/Tetris/sound
+END
+soundfall.wav
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/!svn/ver/135/trunk/Tetris/sound/soundfall.wav
+END
+soundrotate.wav
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/135/trunk/Tetris/sound/soundrotate.wav
+END
+sounddie.wav
+K 25
+svn:wc:ra_dav:version-url
+V 49
+/svn/!svn/ver/135/trunk/Tetris/sound/sounddie.wav
+END
+soundclear.wav
+K 25
+svn:wc:ra_dav:version-url
+V 51
+/svn/!svn/ver/135/trunk/Tetris/sound/soundclear.wav
+END
+tetris.midi
+K 25
+svn:wc:ra_dav:version-url
+V 48
+/svn/!svn/ver/135/trunk/Tetris/sound/tetris.midi
+END
+soundtetris.wav
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/135/trunk/Tetris/sound/soundtetris.wav
+END
